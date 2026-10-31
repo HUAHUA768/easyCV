@@ -11,12 +11,19 @@
       <section class="editor-panel">
         <div class="toolbar">
           <h1>YAMLResume Editor</h1>
-          <div>
-            <button id="saveBtn">保存 YAML</button>
-            <a href="/resume" target="_blank">打开预览</a>
+          <div class="toolbar-actions">
+            <!-- 文件切换下拉框 -->
+            <select id="fileSelector" class="file-selector">
+              <option value="" disabled selected>加载中...</option>
+            </select>
+            <!-- 新建文件按钮（可选） -->
+            <button id="newFileBtn" title="新建 YAML 文件">+ 新建</button>
+            <button id="deleteFileBtn" title="删除当前 YAML 文件" style="display:none; background:#dc3545;">🗑️ 删除</button>
+            <a href="/resume" target="_blank" class="btn-link">预览</a>
+            <button id="saveBtn">保存</button>
           </div>
         </div>
-        <textarea id="yamlInput">{{ yaml_text }}</textarea>
+        <textarea id="yamlInput" placeholder="# 在此编辑 YAML 内容..."></textarea>
         <p id="status"></p>
       </section>
       <section class="preview-panel">
@@ -26,43 +33,157 @@
 
     <script>
       const saveBtn = document.getElementById("saveBtn");
+      const newFileBtn = document.getElementById("newFileBtn");
+      const deleteFileBtn = document.getElementById("deleteFileBtn");
       const yamlInput = document.getElementById("yamlInput");
       const statusText = document.getElementById("status");
       const previewFrame = document.getElementById("previewFrame");
-      // const AUTO_REFRESH_MS = 3000;//自动刷新，已注释
+      const fileSelector = document.getElementById("fileSelector");
 
-      function refreshPreview() {
-        previewFrame.src = "/resume?t=" + Date.now();
+      // ── 获取当前文件名（从 URL 参数）──
+      function getQueryParam(name) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(name) || "";
       }
 
-      statusText.textContent = "已开启自动预览刷新（每 3 秒）";
-      // setInterval(refreshPreview, AUTO_REFRESH_MS);
-      // 1. 保存按钮的点击事件（fetch 异步请求，用了 try-catch）
+      let currentFile = getQueryParam("file") || "resume.yaml";
+
+      // ── 加载文件列表 ──
+      async function loadFileList() {
+        try {
+          const resp = await fetch("/api/resume/files");
+          if (!resp.ok) throw new Error("获取文件列表失败");
+          const files = await resp.json();
+          fileSelector.innerHTML = "";
+          files.forEach(([name]) => {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name === "resume.yaml" ? "📄 resume.yaml (主)" : `📄 ${name}`;
+            if (name === currentFile) opt.selected = true;
+            fileSelector.appendChild(opt);
+          });
+          // 显示删除按钮（仅当有非默认文件时）
+          deleteFileBtn.style.display = 
+            (currentFile !== "resume.yaml" && !files.some(([n]) => n === "resume.yaml")) ? "none" : "inline-block";
+        } catch (err) {
+          statusText.textContent = "⚠️ 加载文件列表失败: " + err.message;
+        }
+      }
+
+      // ── 切换文件 ──
+      fileSelector.addEventListener("change", async () => {
+        const selected = fileSelector.value;
+        if (!selected) return;
+        
+        currentFile = selected;
+        // 更新 URL（不刷新页面）
+        const url = new URL(window.location);
+        url.searchParams.set("file", currentFile);
+        window.history.pushState({}, "", url);
+
+        statusText.textContent = "正在切换文件...";
+        try {
+          const resp = await fetch(`/api/resume/raw?file=${encodeURIComponent(currentFile)}`);
+          if (!resp.ok) throw new Error("读取文件失败");
+          const data = await resp.json();
+          yamlInput.value = data.yaml_text || "";
+          refreshPreview();
+          statusText.textContent = `已切换到 ${currentFile}`;
+          // 更新删除按钮可见性
+          loadFileList();
+        } catch (err) {
+          statusText.textContent = "⚠️ 切换文件失败: " + err.message;
+        }
+      });
+
+      // ── 预览刷新 ──
+      function refreshPreview() {
+        previewFrame.src = `/resume?file=${encodeURIComponent(currentFile)}&t=${Date.now()}`;
+      }
+
+      // ── 新建文件 ──
+      newFileBtn.addEventListener("click", async () => {
+        const name = prompt("请输入新文件名（如 my_resume.yaml）：");
+        if (!name) return;
+        if (!name.endsWith(".yaml") && !name.endsWith(".yml")) {
+          alert("文件名必须以 .yaml 或 .yml 结尾");
+          return;
+        }
+        
+        statusText.textContent = "正在创建文件...";
+        try {
+          const resp = await fetch(`/api/resume/raw?file=${encodeURIComponent(name)}`, { method: "GET" });
+          if (resp.ok) {
+            alert("文件已存在！");
+            return;
+          }
+          // 创建空文件
+          const putResp = await fetch("/api/resume/raw", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ yaml_text: "# 在此编写你的简历\nbasics:\n  name: ''\n", filename: name }),
+          });
+          const data = await putResp.json();
+          if (!putResp.ok) throw new Error(data.detail || "创建失败");
+          
+          // 切换到新文件
+          currentFile = name;
+          const url = new URL(window.location);
+          url.searchParams.set("file", currentFile);
+          window.history.pushState({}, "", url);
+          yamlInput.value = "# 在此编写你的简历\nbasics:\n  name: ''\n";
+          loadFileList();
+          refreshPreview();
+          statusText.textContent = `已创建并切换到 ${name}`;
+        } catch (err) {
+          statusText.textContent = "⚠️ 创建文件失败: " + err.message;
+        }
+      });
+
+      // ── 删除文件 ──
+      deleteFileBtn.addEventListener("click", async () => {
+        if (!confirm(`确定要删除 ${currentFile} 吗？此操作不可撤销。`)) return;
+        
+        statusText.textContent = "正在删除文件...";
+        try {
+          // TODO: 添加 DELETE endpoint，目前只能手动删除
+          statusText.textContent = "⚠️ 删除功能暂未实现，请手动删除文件后刷新页面";
+        } catch (err) {
+          statusText.textContent = "⚠️ 删除失败: " + err.message;
+        }
+      });
+
+      // ── 保存按钮点击事件 ──
       saveBtn.addEventListener("click", async () => {
         statusText.textContent = "保存中...";
         try {
           const resp = await fetch("/api/resume/raw", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ yaml_text: yamlInput.value }),
+            body: JSON.stringify({ 
+              yaml_text: yamlInput.value, 
+              filename: currentFile 
+            }),
           });
           const data = await resp.json();
           if (!resp.ok) throw new Error(data.detail || "保存失败");
-          statusText.textContent = "保存成功，预览已刷新（自动刷新已关闭，开启请取消注释）。";//这里是保存后可预览
+          statusText.textContent = `✅ 已保存到 ${currentFile}，预览已刷新`;
           refreshPreview();
         } catch (err) {
-          statusText.textContent = "保存失败：" + err.message;
+          statusText.textContent = "❌ 保存失败：" + err.message;
         }
       });
 
-      // 2. 全局键盘监听（ctrl+s同时按下会保存当前页面）
+      // ── 键盘快捷键 Ctrl/Cmd+S ──
       document.addEventListener('keydown', function(e) {
-        // 拦截 Ctrl+S (Windows) 或 Cmd+S (Mac)
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-          e.preventDefault(); // 阻止浏览器默认保存网页的行为
-          saveBtn.click();    // 触发上面写好的保存按钮点击事件
+          e.preventDefault();
+          saveBtn.click();
         }
       });
+
+      // ── 初始化：加载文件列表和当前文件内容 ──
+      loadFileList();
     </script>
   </body>
 </html>

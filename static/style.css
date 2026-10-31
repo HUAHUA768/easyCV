@@ -125,7 +125,12 @@ section h2 {
 /* ── Project blocks ── */
 
 .block {
-  margin-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+.personal-project + .personal-project {
+  border-top: 1px solid #d7e0eb;
+  padding-top: 16px;
 }
 
 .proj-row {
@@ -164,9 +169,12 @@ section h2 {
 }
 
 .proj-title {
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
   margin-bottom: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .proj-title a {
@@ -177,11 +185,25 @@ section h2 {
   color: var(--link);
 }
 
+.proj-meta {
+  color: var(--subtle);
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin-bottom: 9px;
+}
+
 .proj-desc {
   font-size: 13px;
   color: var(--text);
   margin-bottom: 2px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.proj-details {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 ul {
@@ -233,6 +255,37 @@ li {
   font-size: 18px;
 }
 
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-selector {
+  min-width: 180px;
+  padding: 6px 10px;
+  border: 1px solid #d7e0eb;
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-selector:hover {
+  border-color: var(--primary);
+}
+
+.btn-link {
+  display: inline-block;
+  padding: 8px 12px;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
 button {
   border: none;
   background: var(--primary);
@@ -280,6 +333,16 @@ iframe {
 .print-bar button {
   font-size: 14px;
   padding: 6px 18px;
+}
+
+.print-bar button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.print-bar span {
+  color: var(--subtle);
+  font-size: 12px;
 }
 
 .print-bar a {

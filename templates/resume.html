@@ -9,7 +9,9 @@
   <body>
     <div class="print-bar no-print">
       <button onclick="window.print()">导出 PDF</button>
+      <button id="exportImageBtn" type="button">导出图片</button>
       <a href="/editor">编辑 YAML</a>
+      <span id="exportStatus" role="status" aria-live="polite"></span>
     </div>
 
     <main class="page">
@@ -40,6 +42,17 @@
       </section>
       {% endif %}
 
+      {% if personal_docs and personal_docs["items"] %}
+      <section>
+        <h2>专业技能</h2>
+        <ul>
+          {% for item in personal_docs["items"] %}
+          <li>{{ item["text"] }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
       {% if code %}
       <section>
         <h2>代码</h2>
@@ -51,17 +64,7 @@
       </section>
       {% endif %}
 
-      {% if personal_docs %}
-      <section>
-        <h2>个人文档</h2>
-        <p class="docs-summary">{{ personal_docs["summary"] }}</p>
-        <ul>
-          {% for item in personal_docs["items"] %}
-          <li>{{ item["text"] }} — <a href="{{ item["url"] }}" target="_blank" rel="noreferrer">{{ item["url"] }}</a></li>
-          {% endfor %}
-        </ul>
-      </section>
-      {% endif %}
+      
 
       {% if team_projects %}
       <section>
@@ -98,35 +101,39 @@
       </section>
       {% endif %}
 
-      {% if personal_projects %}
+
+     {% if personal_projects %}
       <section>
         <h2>个人项目</h2>
         {% for proj in personal_projects %}
-        <article class="block">
-          <div class="proj-row">
-            <span class="proj-date">{{ proj.date }}</span>
-            <span class="proj-company">
-              <strong>{% if proj.url %}<a href="{{ proj.url }}" target="_blank" rel="noreferrer">{{ proj.name }}</a>{% else %}{{ proj.name }}{% endif %}</strong>
-            </span>
-            <span class="proj-role">{{ proj.role }}</span>
-          </div>
-          {% if proj.description %}
-          <p class="proj-desc">{{ proj.description }}</p>
+        <article class="block personal-project">
+          <h3 class="proj-title">
+            {% if proj.url %}<a href="{{ proj.url }}" target="_blank" rel="noreferrer">{{ proj.name }}</a>{% else %}{{ proj.name }}{% endif %}
+          </h3>
+          {% if proj.date %}
+          <p class="proj-meta">{{ proj.date }}</p>
           {% endif %}
-          {% if proj.highlights %}
-          <ul>
-            {% for h in proj.highlights %}
-            <li>{{ h }}</li>
+          {% if proj.details %}
+          <div class="proj-details">
+            {% for detail in proj.details %}
+            {% if detail.get("items") %}
+            <p><strong>{{ detail.get("label", "") }}：</strong></p>
+            <ul>
+              {% for item in detail.get("items", []) %}
+              <li>{{ item }}</li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p><strong>{{ detail.get("label", "") }}：</strong>{{ detail.get("text", "") }}</p>
+            {% endif %}
             {% endfor %}
-          </ul>
-          {% endif %}
-          {% if proj.tech_stack %}
-          <p class="tech-stack"><strong>技术栈：</strong>{{ proj.tech_stack }}</p>
+          </div>
           {% endif %}
         </article>
         {% endfor %}
       </section>
       {% endif %}
+      
 
       {% if lab_tutorials %}
       <section>
@@ -159,5 +166,46 @@
       {% endif %}
 
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script>
+      const exportImageBtn = document.getElementById("exportImageBtn");
+      const exportStatus = document.getElementById("exportStatus");
+      const resumePage = document.querySelector(".page");
+      const resumeName = {{ (basics.get("name") or "")|tojson }};
+
+      exportImageBtn.addEventListener("click", async () => {
+        if (typeof html2canvas !== "function") {
+          exportStatus.textContent = "图片导出组件加载失败，请检查网络后重试";
+          return;
+        }
+
+        exportImageBtn.disabled = true;
+        exportStatus.textContent = "正在生成图片...";
+        try {
+          const canvas = await html2canvas(resumePage, {
+            backgroundColor: "#ffffff",
+            scale: Math.min(window.devicePixelRatio || 1, 2),
+            useCORS: true,
+          });
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+          if (!blob) {
+            throw new Error("无法生成图片数据");
+          }
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${resumeName || "resume"}.png`;
+          link.click();
+          URL.revokeObjectURL(url);
+          exportStatus.textContent = "图片已下载";
+        } catch (error) {
+          console.error("导出简历图片失败", error);
+          exportStatus.textContent = "导出失败，请重试";
+        } finally {
+          exportImageBtn.disabled = false;
+        }
+      });
+    </script>
   </body>
 </html>
